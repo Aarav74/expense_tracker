@@ -2,16 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:expense_tracker/services/database_service.dart';
 import 'package:expense_tracker/services/currency_service.dart';
+import 'package:expense_tracker/services/sound_service.dart';
 import 'package:expense_tracker/widgets/budget_progress_card.dart';
 import 'package:expense_tracker/widgets/transaction_list.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize sound service when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final soundService = Provider.of<SoundService>(context, listen: false);
+      await soundService.initialize();
+      debugPrint('Sound service initialized');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final db = Provider.of<DatabaseService>(context);
     final currency = Provider.of<CurrencyService>(context);
+    final soundService = Provider.of<SoundService>(context, listen: false);
 
     return Scaffold(
       appBar: AppBar(
@@ -20,7 +38,7 @@ class HomeScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.attach_money),
             tooltip: 'Add to Budget',
-            onPressed: () => _showAddToBudgetDialog(context, db, currency),
+            onPressed: () => _showAddToBudgetDialog(context, db, currency, soundService),
           ),
           IconButton(
             icon: const Icon(Icons.currency_exchange),
@@ -76,6 +94,7 @@ class HomeScreen extends StatelessWidget {
                         try {
                           await db.deleteExpense(expense.id);
                         } catch (e) {
+                          if (!mounted) return;
                           // ignore: use_build_context_synchronously
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -101,9 +120,10 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _showAddToBudgetDialog(
-    BuildContext context, 
-    DatabaseService db, 
-    CurrencyService currency
+    BuildContext context,
+    DatabaseService db,
+    CurrencyService currency,
+    SoundService soundService,
   ) async {
     final amountController = TextEditingController();
 
@@ -121,6 +141,9 @@ class HomeScreen extends StatelessWidget {
                 labelText: 'Amount to Add',
                 prefixText: currency.currencySymbol,
                 hintText: 'Enter amount',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ],
@@ -136,6 +159,8 @@ class HomeScreen extends StatelessWidget {
               if (amount > 0) {
                 try {
                   await db.addToBudget(amount);
+                  await soundService.playCoinSound();
+                  if (!mounted) return;
                   // ignore: use_build_context_synchronously
                   Navigator.pop(context);
                   // ignore: use_build_context_synchronously
@@ -145,20 +170,25 @@ class HomeScreen extends StatelessWidget {
                         '${currency.formatAmount(amount)} added to monthly budget!',
                       ),
                       duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 } catch (e) {
+                  if (!mounted) return;
                   // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Failed to add to budget: ${e.toString()}'),
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
               } else {
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Please enter a valid positive amount'),
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
               }
@@ -171,8 +201,8 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _showCurrencyDialog(
-    BuildContext context, 
-    CurrencyService currency
+    BuildContext context,
+    CurrencyService currency,
   ) async {
     await showDialog(
       context: context,
@@ -187,8 +217,8 @@ class HomeScreen extends StatelessWidget {
               final code = currency.availableCurrencies[index];
               return ListTile(
                 title: Text(code),
-                trailing: currency.currentCurrency == code 
-                    ? const Icon(Icons.check) 
+                trailing: currency.currentCurrency == code
+                    ? const Icon(Icons.check)
                     : null,
                 onTap: () {
                   currency.setCurrency(code);
@@ -203,7 +233,9 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _showResetConfirmationDialog(
-      BuildContext context, DatabaseService db) async {
+    BuildContext context,
+    DatabaseService db,
+  ) async {
     return showDialog<void>(
       context: context,
       builder: (BuildContext context) {
@@ -221,6 +253,7 @@ class HomeScreen extends StatelessWidget {
               onPressed: () async {
                 try {
                   await db.resetForNewMonth();
+                  if (!mounted) return;
                   // ignore: use_build_context_synchronously
                   Navigator.of(context).pop();
                   // ignore: use_build_context_synchronously
@@ -228,15 +261,18 @@ class HomeScreen extends StatelessWidget {
                     const SnackBar(
                       content: Text('Expenses and budget reset for new month'),
                       duration: Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 } catch (e) {
+                  if (!mounted) return;
                   // ignore: use_build_context_synchronously
                   Navigator.of(context).pop();
                   // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Failed to reset: ${e.toString()}'),
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }

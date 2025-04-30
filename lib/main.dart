@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:expense_tracker/services/database_service.dart';
 import 'package:expense_tracker/services/notification_service.dart';
 import 'package:expense_tracker/services/currency_service.dart';
+import 'package:expense_tracker/services/sound_service.dart';
 
 Future<void> main() async {
   // Ensure Flutter binding is initialized
@@ -36,6 +37,16 @@ Future<void> main() async {
     await notificationService.initialize();
     await notificationService.requestPermissions();
     final currencyService = CurrencyService(currencyBox);
+    final soundService = SoundService();
+    await soundService.initialize(); // Initialize sound service
+
+    // Verify sound file exists
+    try {
+      await rootBundle.load('assets/sounds/coin.wav');
+      debugPrint('Sound file loaded successfully');
+    } catch (e) {
+      debugPrint('Error loading sound file: $e');
+    }
 
     // Run the app with providers
     runApp(
@@ -48,11 +59,13 @@ Future<void> main() async {
               budgetBox: budgetBox,
               notificationService: notificationService,
               currencyService: currencyService,
+              soundService: soundService,
             ),
             lazy: false,
           ),
           ChangeNotifierProvider.value(value: currencyService),
           Provider.value(value: notificationService),
+          Provider.value(value: soundService),
         ],
         child: const MyApp(),
       ),

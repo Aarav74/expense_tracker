@@ -1,3 +1,4 @@
+import 'package:expense_tracker/services/sound_service.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:expense_tracker/models/expense.dart';
@@ -7,10 +8,11 @@ import 'package:expense_tracker/services/currency_service.dart';
 class DatabaseService extends ChangeNotifier {
   late final Box<Expense> _expenseBox;
   late final Box<List<Expense>> _archiveBox;
-  late final Box<double> _budgetBox; // New box for budget storage
+  late final Box<double> _budgetBox;
   bool _isInitialized = false;
   final NotificationService _notificationService;
   final CurrencyService _currencyService;
+  final SoundService _soundService;
 
   DatabaseService({
     required Box<Expense> expenseBox,
@@ -18,12 +20,13 @@ class DatabaseService extends ChangeNotifier {
     required Box<double> budgetBox,
     required NotificationService notificationService,
     required CurrencyService currencyService,
-  }) : 
-    _expenseBox = expenseBox,
-    _archiveBox = archiveBox,
-    _budgetBox = budgetBox,
-    _notificationService = notificationService,
-    _currencyService = currencyService {
+    required SoundService soundService,
+  })  : _expenseBox = expenseBox,
+        _archiveBox = archiveBox,
+        _budgetBox = budgetBox,
+        _notificationService = notificationService,
+        _currencyService = currencyService,
+        _soundService = soundService {
     _isInitialized = true;
     _initializeServices();
   }
@@ -40,6 +43,7 @@ class DatabaseService extends ChangeNotifier {
 
   Future<void> _initializeServices() async {
     await _notificationService.initialize();
+    await _soundService.initialize(); // Initialize sound service
   }
 
   // Budget Management
@@ -53,6 +57,7 @@ class DatabaseService extends ChangeNotifier {
   Future<void> addToBudget(double amount) async {
     final currentBudget = monthlyBudget;
     await _budgetBox.put('current_budget', currentBudget + amount);
+    await _soundService.playCoinSound(); // Play sound when adding to budget
     notifyListeners();
   }
 
@@ -104,7 +109,7 @@ class DatabaseService extends ChangeNotifier {
     _checkInitialization();
     await _archiveCurrentMonthExpenses();
     await _expenseBox.clear();
-    await _budgetBox.put('current_budget', 0.0); // Reset budget to 0
+    await _budgetBox.put('current_budget', 0.0);
     notifyListeners();
   }
 
@@ -204,5 +209,6 @@ class DatabaseService extends ChangeNotifier {
     await _expenseBox.close();
     await _archiveBox.close();
     await _budgetBox.close();
+    _soundService.dispose(); // Dispose sound service
   }
 }

@@ -49,6 +49,7 @@ class BudgetProgressCard extends StatelessWidget {
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: Colors.white, // Changed to white
                   ),
                 ),
                 Text(
@@ -82,7 +83,7 @@ class BudgetProgressCard extends StatelessWidget {
                 _buildMetricColumn(
                   label: 'Spent',
                   value: currency.formatAmount(spentAmount),
-                  color: Colors.black,
+                  color: Colors.white, // Changed to white
                 ),
                 
                 // Remaining/Over budget
@@ -96,7 +97,7 @@ class BudgetProgressCard extends StatelessWidget {
                 _buildMetricColumn(
                   label: 'Total Budget',
                   value: currency.formatAmount(totalBudget),
-                  color: Colors.black,
+                  color: Colors.white, // Changed to white
                 ),
               ],
             ),
