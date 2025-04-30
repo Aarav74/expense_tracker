@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:expense_tracker/models/expense.dart';
 import 'package:expense_tracker/services/database_service.dart';
+import 'package:expense_tracker/services/currency_service.dart';
 import 'package:expense_tracker/widgets/budget_progress_card.dart';
 import 'package:expense_tracker/widgets/transaction_list.dart';
 
@@ -11,6 +11,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final db = Provider.of<DatabaseService>(context);
+    final currency = Provider.of<CurrencyService>(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -18,8 +19,13 @@ class HomeScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.attach_money),
-            tooltip: 'Add Money',
-            onPressed: () => _showAddMoneyDialog(context, db),
+            tooltip: 'Add to Budget',
+            onPressed: () => _showAddToBudgetDialog(context, db, currency),
+          ),
+          IconButton(
+            icon: const Icon(Icons.currency_exchange),
+            tooltip: 'Change Currency',
+            onPressed: () => _showCurrencyDialog(context, currency),
           ),
           IconButton(
             icon: const Icon(Icons.restart_alt),
@@ -46,7 +52,8 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     BudgetProgressCard(
                       spentAmount: db.totalSpent,
-                      totalBudget: db.monthlyLimit,
+                      totalBudget: db.monthlyBudget,
+                      currency: currency,
                     ),
                     const SizedBox(height: 16),
                     const Padding(
@@ -64,6 +71,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     TransactionList(
                       expenses: db.getRecentExpenses(),
+                      currency: currency,
                       onRemove: (expense) async {
                         try {
                           await db.deleteExpense(expense.id);
@@ -92,30 +100,27 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showAddMoneyDialog(BuildContext context, DatabaseService db) async {
+  Future<void> _showAddToBudgetDialog(
+    BuildContext context, 
+    DatabaseService db, 
+    CurrencyService currency
+  ) async {
     final amountController = TextEditingController();
-    final categoryController = TextEditingController(text: 'Income');
 
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Money'),
+        title: const Text('Add to Monthly Budget'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: amountController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                prefixText: '\$',
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: categoryController,
-              decoration: const InputDecoration(
-                labelText: 'Category',
+              decoration: InputDecoration(
+                labelText: 'Amount to Add',
+                prefixText: currency.currencySymbol,
+                hintText: 'Enter amount',
               ),
             ),
           ],
@@ -130,27 +135,23 @@ class HomeScreen extends StatelessWidget {
               final amount = double.tryParse(amountController.text) ?? 0;
               if (amount > 0) {
                 try {
-                  await db.addExpense(Expense(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    title: 'Added Money',
-                    amount: -amount, // Negative amount increases available budget
-                    date: DateTime.now(),
-                    category: categoryController.text,
-                  ));
+                  await db.addToBudget(amount);
                   // ignore: use_build_context_synchronously
                   Navigator.pop(context);
                   // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Money added successfully!'),
-                      duration: Duration(seconds: 2),
+                    SnackBar(
+                      content: Text(
+                        '${currency.formatAmount(amount)} added to monthly budget!',
+                      ),
+                      duration: const Duration(seconds: 2),
                     ),
                   );
                 } catch (e) {
                   // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Failed to add money: ${e.toString()}'),
+                      content: Text('Failed to add to budget: ${e.toString()}'),
                     ),
                   );
                 }
@@ -169,6 +170,38 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _showCurrencyDialog(
+    BuildContext context, 
+    CurrencyService currency
+  ) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Currency'),
+        content: SizedBox(
+          width: double.minPositive,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: currency.availableCurrencies.length,
+            itemBuilder: (context, index) {
+              final code = currency.availableCurrencies[index];
+              return ListTile(
+                title: Text(code),
+                trailing: currency.currentCurrency == code 
+                    ? const Icon(Icons.check) 
+                    : null,
+                onTap: () {
+                  currency.setCurrency(code);
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showResetConfirmationDialog(
       BuildContext context, DatabaseService db) async {
     return showDialog<void>(
@@ -177,7 +210,7 @@ class HomeScreen extends StatelessWidget {
         return AlertDialog(
           title: const Text('Reset Expenses'),
           content: const Text(
-              'Are you sure you want to reset all expenses for the new month? This action cannot be undone.'),
+              'Are you sure you want to reset all expenses and budget for the new month? This action cannot be undone.'),
           actions: <Widget>[
             TextButton(
               child: const Text('Cancel'),
@@ -193,7 +226,7 @@ class HomeScreen extends StatelessWidget {
                   // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Expenses reset for new month'),
+                      content: Text('Expenses and budget reset for new month'),
                       duration: Duration(seconds: 2),
                     ),
                   );

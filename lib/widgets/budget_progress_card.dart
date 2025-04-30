@@ -1,26 +1,33 @@
+import 'package:expense_tracker/services/currency_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class BudgetProgressCard extends StatelessWidget {
   final double spentAmount;
   final double totalBudget;
+  final CurrencyService currency;
 
   const BudgetProgressCard({
     super.key,
     required this.spentAmount,
     required this.totalBudget,
+    required this.currency,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Handle division by zero and negative values
+    // Calculate budget metrics
     final progress = totalBudget > 0 ? (spentAmount / totalBudget).clamp(0.0, 1.0) : 0.0;
     final remaining = (totalBudget - spentAmount).clamp(0.0, totalBudget);
     final percentage = (progress * 100).toStringAsFixed(1);
+    final isOverBudget = remaining < 0;
 
-    // Determine colors based on budget usage
+    // Determine colors based on budget status
     final progressColor = _getProgressColor(progress);
-    final remainingColor = remaining < 0 ? Colors.red : Colors.green;
+    final remainingColor = isOverBudget ? Colors.red : Colors.green;
+    final remainingText = isOverBudget 
+        ? 'Over by ${currency.formatAmount(-remaining)}'
+        : currency.formatAmount(remaining);
 
     return Card(
       margin: const EdgeInsets.all(16),
@@ -33,6 +40,7 @@ class BudgetProgressCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Budget title and percentage
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -53,45 +61,66 @@ class BudgetProgressCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
+            
+            // Progress bar
             ClipRRect(
               borderRadius: BorderRadius.circular(5),
               child: LinearProgressIndicator(
-                value: progress,
+                value: progress > 1 ? 1 : progress,
                 backgroundColor: Colors.grey[200],
                 valueColor: AlwaysStoppedAnimation(progressColor),
                 minHeight: 10,
               ),
             ),
             const SizedBox(height: 12),
+            
+            // Budget metrics
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildAmountColumn(
+                // Spent amount
+                _buildMetricColumn(
                   label: 'Spent',
-                  amount: spentAmount,
+                  value: currency.formatAmount(spentAmount),
                   color: Colors.black,
                 ),
-                _buildAmountColumn(
-                  label: 'Remaining',
-                  amount: remaining,
+                
+                // Remaining/Over budget
+                _buildMetricColumn(
+                  label: isOverBudget ? 'Over Budget' : 'Remaining',
+                  value: remainingText,
                   color: remainingColor,
                 ),
-                _buildAmountColumn(
-                  label: 'Total',
-                  amount: totalBudget,
+                
+                // Total budget
+                _buildMetricColumn(
+                  label: 'Total Budget',
+                  value: currency.formatAmount(totalBudget),
                   color: Colors.black,
                 ),
               ],
             ),
+            
+            // Warning message if over budget
+            if (isOverBudget) ...[
+              const SizedBox(height: 12),
+              Text(
+                'You have exceeded your budget!',
+                style: GoogleFonts.inter(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAmountColumn({
+  Widget _buildMetricColumn({
     required String label,
-    required double amount,
+    required String value,
     required Color color,
   }) {
     return Column(
@@ -104,8 +133,9 @@ class BudgetProgressCard extends StatelessWidget {
             color: Colors.grey,
           ),
         ),
+        const SizedBox(height: 4),
         Text(
-          '\$${amount.toStringAsFixed(2)}',
+          value,
           style: GoogleFonts.inter(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -117,8 +147,9 @@ class BudgetProgressCard extends StatelessWidget {
   }
 
   Color _getProgressColor(double progress) {
-    if (progress >= 0.9) return Colors.red;
-    if (progress >= 0.7) return Colors.orange;
-    return Colors.blueAccent;
+    if (progress >= 1.0) return Colors.red;
+    if (progress >= 0.8) return Colors.orange;
+    if (progress >= 0.5) return Colors.blue;
+    return Colors.green;
   }
 }

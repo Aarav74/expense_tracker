@@ -2,51 +2,61 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:expense_tracker/models/expense.dart';
 import 'package:expense_tracker/services/notification_service.dart';
+import 'package:expense_tracker/services/currency_service.dart';
 
 class DatabaseService extends ChangeNotifier {
   late final Box<Expense> _expenseBox;
-  late final Box<List<Expense>> _archiveBox; // For archiving
-  double _monthlyLimit = 1000.0;
+  late final Box<List<Expense>> _archiveBox;
+  late final Box<double> _budgetBox; // New box for budget storage
   bool _isInitialized = false;
-  final NotificationService _notificationService = NotificationService();
+  final NotificationService _notificationService;
+  final CurrencyService _currencyService;
 
-  /// Initialize with required Hive boxes
   DatabaseService({
     required Box<Expense> expenseBox,
     required Box<List<Expense>> archiveBox,
-  }) {
-    _expenseBox = expenseBox;
-    _archiveBox = archiveBox;
+    required Box<double> budgetBox,
+    required NotificationService notificationService,
+    required CurrencyService currencyService,
+  }) : 
+    _expenseBox = expenseBox,
+    _archiveBox = archiveBox,
+    _budgetBox = budgetBox,
+    _notificationService = notificationService,
+    _currencyService = currencyService {
     _isInitialized = true;
-    _initializeNotificationService();
+    _initializeServices();
   }
 
-  /// Async initialization alternative
   Future<void> init() async {
     if (!_isInitialized) {
       _expenseBox = await Hive.openBox<Expense>('expenses');
       _archiveBox = await Hive.openBox<List<Expense>>('expenses_archive');
+      _budgetBox = await Hive.openBox<double>('monthly_budget');
       _isInitialized = true;
-      await _initializeNotificationService();
+      await _initializeServices();
     }
   }
 
-  Future<void> _initializeNotificationService() async {
+  Future<void> _initializeServices() async {
     await _notificationService.initialize();
   }
 
-  // Check initialization status
-  bool get isInitialized => _isInitialized;
+  // Budget Management
+  double get monthlyBudget => _budgetBox.get('current_budget', defaultValue: 1000.0) ?? 1000.0;
 
-  // Monthly budget methods
-  double get monthlyLimit => _monthlyLimit;
-
-  set monthlyLimit(double value) {
-    _monthlyLimit = value;
+  Future<void> setMonthlyBudget(double amount) async {
+    await _budgetBox.put('current_budget', amount);
     notifyListeners();
   }
 
-  // Expense methods
+  Future<void> addToBudget(double amount) async {
+    final currentBudget = monthlyBudget;
+    await _budgetBox.put('current_budget', currentBudget + amount);
+    notifyListeners();
+  }
+
+  // Expense Management
   List<Expense> get expenses {
     _checkInitialization();
     return _expenseBox.values.toList();
@@ -89,11 +99,12 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
-  // Reset functionality
+  // Monthly Reset
   Future<void> resetForNewMonth() async {
     _checkInitialization();
     await _archiveCurrentMonthExpenses();
     await _expenseBox.clear();
+    await _budgetBox.put('current_budget', 0.0); // Reset budget to 0
     notifyListeners();
   }
 
@@ -109,19 +120,7 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
-  Future<List<Expense>> getArchivedExpenses(String monthYear) async {
-    _checkInitialization();
-    return _archiveBox.get(monthYear, defaultValue: []) ?? [];
-  }
-
-  Future<void> clearAll() async {
-    _checkInitialization();
-    await _expenseBox.clear();
-    await _archiveBox.clear();
-    notifyListeners();
-  }
-
-  // Analytics methods
+  // Analytics
   double get totalSpent {
     _checkInitialization();
     return _expenseBox.values.fold(0.0, (sum, expense) => sum + expense.amount);
@@ -129,44 +128,17 @@ class DatabaseService extends ChangeNotifier {
 
   double get remainingBudget {
     _checkInitialization();
-    return _monthlyLimit - totalSpent;
-  }
-
-  Map<String, double> get categoryWiseExpenses {
-    _checkInitialization();
-    final Map<String, double> result = {};
-    for (var expense in _expenseBox.values) {
-      result.update(
-        expense.category,
-        (value) => value + expense.amount,
-        ifAbsent: () => expense.amount,
-      );
-    }
-    return result;
-  }
-
-  Map<DateTime, double> get dailyExpenses {
-    _checkInitialization();
-    final Map<DateTime, double> result = {};
-    for (var expense in _expenseBox.values) {
-      final date = DateTime(expense.date.year, expense.date.month, expense.date.day);
-      result.update(
-        date,
-        (value) => value + expense.amount,
-        ifAbsent: () => expense.amount,
-      );
-    }
-    return result;
+    return monthlyBudget - totalSpent;
   }
 
   double get budgetProgress {
     _checkInitialization();
-    return totalSpent / _monthlyLimit;
+    return monthlyBudget > 0 ? totalSpent / monthlyBudget : 0;
   }
 
   bool get isBudgetExceeded {
     _checkInitialization();
-    return totalSpent > _monthlyLimit;
+    return totalSpent > monthlyBudget;
   }
 
   bool get isApproachingBudget {
@@ -174,25 +146,30 @@ class DatabaseService extends ChangeNotifier {
     return budgetProgress >= 0.8 && !isBudgetExceeded;
   }
 
-  // Notification handling
+  // Notifications
   Future<void> _checkBudgetAndNotify(BuildContext? context) async {
     _checkInitialization();
     
     if (isBudgetExceeded) {
+      final overspendAmount = totalSpent - monthlyBudget;
       await _notificationService.showInstantNotification(
         title: 'Budget Exceeded!',
-        body: 'You have exceeded your monthly budget by \$${(totalSpent - _monthlyLimit).toStringAsFixed(2)}',
+        body: 'You exceeded budget by ${_currencyService.formatAmount(overspendAmount)}',
       );
       
       if (context != null && context.mounted) {
-        _showBudgetAlert(context, 'Budget Exceeded', 
-          'You have spent \$${totalSpent.toStringAsFixed(2)} this month, exceeding your \$${_monthlyLimit.toStringAsFixed(2)} budget.');
+        _showBudgetAlert(
+          context, 
+          'Budget Exceeded', 
+          'You spent ${_currencyService.formatAmount(totalSpent)} of '
+          '${_currencyService.formatAmount(monthlyBudget)} budget.'
+        );
       }
     }
     else if (isApproachingBudget) {
       await _notificationService.showInstantNotification(
         title: 'Budget Warning',
-        body: 'You have used ${(budgetProgress * 100).toStringAsFixed(0)}% of your monthly budget',
+        body: 'You used ${(budgetProgress * 100).toStringAsFixed(0)}% of your budget',
       );
     }
   }
@@ -213,10 +190,19 @@ class DatabaseService extends ChangeNotifier {
     );
   }
 
-  // Initialization check
+  // Helper Methods
   void _checkInitialization() {
     if (!_isInitialized) {
       throw Exception('DatabaseService not initialized. Call init() first.');
     }
+  }
+
+  // Cleanup
+  @override
+  Future<void> dispose() async {
+    super.dispose();
+    await _expenseBox.close();
+    await _archiveBox.close();
+    await _budgetBox.close();
   }
 }

@@ -1,4 +1,5 @@
 import 'package:expense_tracker/screens/analytics_screen.dart';
+import 'package:expense_tracker/services/currency_service.dart';
 import 'package:flutter/material.dart';
 import 'package:expense_tracker/models/expense.dart';
 import 'package:intl/intl.dart';
@@ -10,7 +11,7 @@ class TransactionList extends StatelessWidget {
   const TransactionList({
     super.key,
     required this.expenses,
-    required this.onRemove,
+    required this.onRemove, required CurrencyService currency,
   });
 
   @override

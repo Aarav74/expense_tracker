@@ -7,6 +7,7 @@ import 'package:expense_tracker/screens/add_expense_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:expense_tracker/services/database_service.dart';
 import 'package:expense_tracker/services/notification_service.dart';
+import 'package:expense_tracker/services/currency_service.dart';
 
 Future<void> main() async {
   // Ensure Flutter binding is initialized
@@ -27,11 +28,14 @@ Future<void> main() async {
     // Open required boxes
     final expenseBox = await Hive.openBox<Expense>('expenses');
     final archiveBox = await Hive.openBox<List<Expense>>('expenses_archive');
+    final budgetBox = await Hive.openBox<double>('monthly_budget');
+    final currencyBox = await Hive.openBox<String>('currency_preferences');
     
-    // Initialize notification service
+    // Initialize services
     final notificationService = NotificationService();
     await notificationService.initialize();
     await notificationService.requestPermissions();
+    final currencyService = CurrencyService(currencyBox);
 
     // Run the app with providers
     runApp(
@@ -41,9 +45,13 @@ Future<void> main() async {
             create: (context) => DatabaseService(
               expenseBox: expenseBox,
               archiveBox: archiveBox,
+              budgetBox: budgetBox,
+              notificationService: notificationService,
+              currencyService: currencyService,
             ),
             lazy: false,
           ),
+          ChangeNotifierProvider.value(value: currencyService),
           Provider.value(value: notificationService),
         ],
         child: const MyApp(),
@@ -125,10 +133,17 @@ class AppTheme {
       centerTitle: true,
       elevation: 0,
       scrolledUnderElevation: 2,
+      titleTextStyle: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: Colors.black,
+      ),
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
       elevation: 4,
       shape: CircleBorder(),
+      backgroundColor: Colors.deepPurple,
+      foregroundColor: Colors.white,
     ),
     cardTheme: CardTheme(
       elevation: 2,
@@ -136,6 +151,12 @@ class AppTheme {
         borderRadius: BorderRadius.circular(12),
       ),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     ),
   );
 
@@ -149,10 +170,17 @@ class AppTheme {
       centerTitle: true,
       elevation: 0,
       scrolledUnderElevation: 2,
+      titleTextStyle: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
       elevation: 4,
       shape: CircleBorder(),
+      backgroundColor: Colors.deepPurpleAccent,
+      foregroundColor: Colors.white,
     ),
     cardTheme: CardTheme(
       elevation: 2,
@@ -160,6 +188,12 @@ class AppTheme {
         borderRadius: BorderRadius.circular(12),
       ),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     ),
   );
 }
