@@ -1,4 +1,3 @@
-import 'package:expense_tracker/screens/analytics_screen.dart';
 import 'package:expense_tracker/services/currency_service.dart';
 import 'package:flutter/material.dart';
 import 'package:expense_tracker/models/expense.dart';
@@ -6,130 +5,146 @@ import 'package:intl/intl.dart';
 
 class TransactionList extends StatelessWidget {
   final List<Expense> expenses;
-  final void Function(Expense) onRemove;
+  final CurrencyService currency;
+  final void Function(Expense)? onRemove;
+  final bool showDelete;
 
   const TransactionList({
     super.key,
     required this.expenses,
-    required this.onRemove, required CurrencyService currency,
+    required this.currency,
+    this.onRemove,
+    this.showDelete = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currencyFormat = NumberFormat.currency(symbol: '\$');
 
     return ListView.builder(
-      shrinkWrap: true, // Add this
-      physics: const NeverScrollableScrollPhysics(), // Add this
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: expenses.length,
       itemBuilder: (ctx, index) {
         final expense = expenses[index];
-        final categoryColor = getCategoryColor(expense.category);
+        final categoryColor = _getCategoryColor(expense.category);
 
         return Container(
           margin: EdgeInsets.symmetric(
             horizontal: theme.cardTheme.margin?.horizontal ?? 16,
             vertical: 4,
           ),
-          child: Dismissible(
-            key: ValueKey(expense.id),
-            background: Container(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.error,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.only(right: 20),
-              child: const Icon(
-                Icons.delete,
-                color: Colors.white,
-                size: 30,
-              ),
-            ),
-            direction: DismissDirection.endToStart,
-            onDismissed: (direction) => onRemove(expense),
-            child: Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    // ignore: deprecated_member_use
-                    backgroundColor: categoryColor.withOpacity(0.2),
-                    child: Icon(
-                      _getCategoryIcon(expense.category),
-                      color: categoryColor,
+          child: showDelete && onRemove != null
+              ? Dismissible(
+                  key: ValueKey(expense.id),
+                  background: Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.error,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Icon(
+                      Icons.delete,
+                      color: Colors.white,
+                      size: 30,
                     ),
                   ),
-                  title: Text(
-                    expense.category,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (expense.location != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.location_on, size: 14),
-                              const SizedBox(width: 4),
-                              Text(
-                                expense.location!,
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                      Text(
-                        DateFormat.yMMMd().format(expense.date),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      if (expense.description != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            expense.description!,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
-                    ],
-                  ),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '-${currencyFormat.format(expense.amount)}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.error,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (expense.date.isToday())
-                        Text(
-                          'Today',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+                  direction: DismissDirection.endToStart,
+                  onDismissed: (direction) => onRemove!(expense),
+                  child: _buildExpenseCard(expense, categoryColor, theme),
+                )
+              : _buildExpenseCard(expense, categoryColor, theme),
         );
       },
     );
+  }
+
+  Widget _buildExpenseCard(Expense expense, Color categoryColor, ThemeData theme) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: CircleAvatar(
+            // ignore: deprecated_member_use
+            backgroundColor: categoryColor.withOpacity(0.2),
+            child: Icon(
+              _getCategoryIcon(expense.category),
+              color: categoryColor,
+            ),
+          ),
+          title: Text(
+            expense.category,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (expense.location != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        expense.location!,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              Text(
+                DateFormat.yMMMd().format(expense.date),
+                style: theme.textTheme.bodySmall,
+              ),
+              if (expense.description != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    expense.description!,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+            ],
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '-${currency.formatAmount(expense.amount)}',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (_isToday(expense.date))
+                Text(
+                  'Today',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && 
+           date.month == now.month && 
+           date.day == now.day;
   }
 
   IconData _getCategoryIcon(String category) {
@@ -152,11 +167,25 @@ class TransactionList extends StatelessWidget {
         return Icons.money;
     }
   }
-}
 
-extension DateExtensions on DateTime {
-  bool isToday() {
-    final now = DateTime.now();
-    return year == now.year && month == now.month && day == now.day;
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'food':
+        return Colors.orange;
+      case 'transport':
+        return Colors.blue;
+      case 'entertainment':
+        return Colors.purple;
+      case 'bills':
+        return Colors.red;
+      case 'shopping':
+        return Colors.teal;
+      case 'healthcare':
+        return Colors.pink;
+      case 'education':
+        return Colors.indigo;
+      default:
+        return Colors.green;
+    }
   }
 }

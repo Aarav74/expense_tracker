@@ -5,6 +5,9 @@ import 'package:expense_tracker/services/currency_service.dart';
 import 'package:expense_tracker/services/sound_service.dart';
 import 'package:expense_tracker/widgets/budget_progress_card.dart';
 import 'package:expense_tracker/widgets/transaction_list.dart';
+import 'package:expense_tracker/screens/spending_history_screen.dart';
+import 'package:expense_tracker/screens/budget_history_screen.dart';
+import 'package:expense_tracker/screens/analytics_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +37,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Expense Tracker'),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.attach_money),
@@ -52,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      drawer: _buildDrawer(context),
       body: LayoutBuilder(
         builder: (context, constraints) {
           return RefreshIndicator(
@@ -102,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           );
                         }
-                      },
+                      }, showDelete: false,
                     ),
                     SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
                   ],
@@ -115,6 +125,76 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.add),
         onPressed: () => Navigator.pushNamed(context, '/add-expense'),
+      ),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context) {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          const DrawerHeader(
+            decoration: BoxDecoration(
+              color: Colors.deepPurple,
+            ),
+            child: Text(
+              'Expense Tracker',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: const Text('Spending History'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SpendingHistoryScreen(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.attach_money),
+            title: const Text('Budget Additions'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BudgetHistoryScreen(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.analytics),
+            title: const Text('Analytics'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AnalyticsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('Settings'),
+            onTap: () {
+              Navigator.pop(context);
+              // Add settings navigation here
+            },
+          ),
+        ],
       ),
     );
   }

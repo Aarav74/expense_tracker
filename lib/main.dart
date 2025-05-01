@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:expense_tracker/models/expense.dart';
+import 'package:expense_tracker/models/budget_history_entry.dart';
 import 'package:expense_tracker/screens/home_screen.dart';
 import 'package:expense_tracker/screens/add_expense_screen.dart';
 import 'package:provider/provider.dart';
@@ -25,12 +26,14 @@ Future<void> main() async {
     
     // Register adapters
     Hive.registerAdapter(ExpenseAdapter());
+    Hive.registerAdapter(BudgetHistoryEntryAdapter());
     
     // Open required boxes
     final expenseBox = await Hive.openBox<Expense>('expenses');
     final archiveBox = await Hive.openBox<List<Expense>>('expenses_archive');
     final budgetBox = await Hive.openBox<double>('monthly_budget');
     final currencyBox = await Hive.openBox<String>('currency_preferences');
+    final budgetHistoryBox = await Hive.openBox<BudgetHistoryEntry>('budget_history');
     
     // Initialize services
     final notificationService = NotificationService();
@@ -38,7 +41,7 @@ Future<void> main() async {
     await notificationService.requestPermissions();
     final currencyService = CurrencyService(currencyBox);
     final soundService = SoundService();
-    await soundService.initialize(); // Initialize sound service
+    await soundService.initialize();
 
     // Verify sound file exists
     try {
@@ -57,6 +60,7 @@ Future<void> main() async {
               expenseBox: expenseBox,
               archiveBox: archiveBox,
               budgetBox: budgetBox,
+              budgetHistoryBox: budgetHistoryBox,
               notificationService: notificationService,
               currencyService: currencyService,
               soundService: soundService,
@@ -78,17 +82,34 @@ Future<void> main() async {
       MaterialApp(
         home: Scaffold(
           backgroundColor: Colors.red[100],
-          body: const Center(
+          body: Center(
             child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Text(
-                'Failed to initialize app. Please restart and try again.',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-                textAlign: TextAlign.center,
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 50, color: Colors.red),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Failed to initialize app',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Error: ${error.toString()}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => main(),
+                    child: const Text('Try Again'),
+                  ),
+                ],
               ),
             ),
           ),
@@ -164,12 +185,20 @@ class AppTheme {
         borderRadius: BorderRadius.circular(12),
       ),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      surfaceTintColor: Colors.white,
     ),
     inputDecorationTheme: InputDecorationTheme(
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      filled: true,
+      fillColor: Colors.grey[50],
+    ),
+    listTileTheme: ListTileThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
     ),
   );
 
@@ -201,12 +230,21 @@ class AppTheme {
         borderRadius: BorderRadius.circular(12),
       ),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.grey[900],
     ),
     inputDecorationTheme: InputDecorationTheme(
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      filled: true,
+      fillColor: Colors.grey[800],
+    ),
+    listTileTheme: ListTileThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      tileColor: Colors.grey[850],
     ),
   );
 }

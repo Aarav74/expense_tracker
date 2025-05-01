@@ -1,14 +1,17 @@
+import 'package:expense_tracker/models/budget_history_entry.dart';
+import 'package:expense_tracker/models/expense.dart';
+import 'package:expense_tracker/services/currency_service.dart';
+import 'package:expense_tracker/services/notification_service.dart';
 import 'package:expense_tracker/services/sound_service.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:expense_tracker/models/expense.dart';
-import 'package:expense_tracker/services/notification_service.dart';
-import 'package:expense_tracker/services/currency_service.dart';
 
 class DatabaseService extends ChangeNotifier {
   late final Box<Expense> _expenseBox;
   late final Box<List<Expense>> _archiveBox;
   late final Box<double> _budgetBox;
+  late final Box<BudgetHistoryEntry> _budgetHistoryBox;
+  final List<BudgetHistoryEntry> _budgetHistory = [];
   bool _isInitialized = false;
   final NotificationService _notificationService;
   final CurrencyService _currencyService;
@@ -18,17 +21,20 @@ class DatabaseService extends ChangeNotifier {
     required Box<Expense> expenseBox,
     required Box<List<Expense>> archiveBox,
     required Box<double> budgetBox,
+    required Box<BudgetHistoryEntry> budgetHistoryBox,
     required NotificationService notificationService,
     required CurrencyService currencyService,
     required SoundService soundService,
   })  : _expenseBox = expenseBox,
         _archiveBox = archiveBox,
         _budgetBox = budgetBox,
+        _budgetHistoryBox = budgetHistoryBox,
         _notificationService = notificationService,
         _currencyService = currencyService,
         _soundService = soundService {
     _isInitialized = true;
     _initializeServices();
+    _loadBudgetHistory();
   }
 
   Future<void> init() async {
@@ -36,28 +42,43 @@ class DatabaseService extends ChangeNotifier {
       _expenseBox = await Hive.openBox<Expense>('expenses');
       _archiveBox = await Hive.openBox<List<Expense>>('expenses_archive');
       _budgetBox = await Hive.openBox<double>('monthly_budget');
+      _budgetHistoryBox = await Hive.openBox<BudgetHistoryEntry>('budget_history');
       _isInitialized = true;
       await _initializeServices();
+      _loadBudgetHistory();
     }
   }
 
   Future<void> _initializeServices() async {
     await _notificationService.initialize();
-    await _soundService.initialize(); // Initialize sound service
+    await _soundService.initialize();
+  }
+
+  void _loadBudgetHistory() {
+    _budgetHistory.addAll(_budgetHistoryBox.values);
   }
 
   // Budget Management
   double get monthlyBudget => _budgetBox.get('current_budget', defaultValue: 1000.0) ?? 1000.0;
 
-  Future<void> setMonthlyBudget(double amount) async {
+  List<BudgetHistoryEntry> get budgetHistory => _budgetHistory;
+
+  Future<void> setMonthlyBudget(double amount, [String note = '']) async {
     await _budgetBox.put('current_budget', amount);
+    final entry = BudgetHistoryEntry(amount, DateTime.now(), note);
+    _budgetHistory.add(entry);
+    await _budgetHistoryBox.add(entry);
     notifyListeners();
   }
 
-  Future<void> addToBudget(double amount) async {
+  Future<void> addToBudget(double amount, [String note = '']) async {
     final currentBudget = monthlyBudget;
-    await _budgetBox.put('current_budget', currentBudget + amount);
-    await _soundService.playCoinSound(); // Play sound when adding to budget
+    final newAmount = currentBudget + amount;
+    await _budgetBox.put('current_budget', newAmount);
+    final entry = BudgetHistoryEntry(amount, DateTime.now(), note);
+    _budgetHistory.add(entry);
+    await _budgetHistoryBox.add(entry);
+    await _soundService.playCoinSound();
     notifyListeners();
   }
 
@@ -78,8 +99,9 @@ class DatabaseService extends ChangeNotifier {
     _checkInitialization();
     await _expenseBox.add(expense);
     notifyListeners();
-    // ignore: use_build_context_synchronously
-    await _checkBudgetAndNotify(context);
+    if (context != null && context.mounted) {
+      await _checkBudgetAndNotify(context);
+    }
   }
 
   Future<void> updateExpense(String id, Expense newExpense, {BuildContext? context}) async {
@@ -88,8 +110,9 @@ class DatabaseService extends ChangeNotifier {
     if (index != -1) {
       await _expenseBox.putAt(index, newExpense);
       notifyListeners();
-      // ignore: use_build_context_synchronously
-      await _checkBudgetAndNotify(context);
+      if (context != null && context.mounted) {
+        await _checkBudgetAndNotify(context);
+      }
     }
   }
 
@@ -99,8 +122,9 @@ class DatabaseService extends ChangeNotifier {
     if (index != -1) {
       await _expenseBox.deleteAt(index);
       notifyListeners();
-      // ignore: use_build_context_synchronously
-      await _checkBudgetAndNotify(context);
+      if (context != null && context.mounted) {
+        await _checkBudgetAndNotify(context);
+      }
     }
   }
 
@@ -110,6 +134,8 @@ class DatabaseService extends ChangeNotifier {
     await _archiveCurrentMonthExpenses();
     await _expenseBox.clear();
     await _budgetBox.put('current_budget', 0.0);
+    await _budgetHistoryBox.clear();
+    _budgetHistory.clear();
     notifyListeners();
   }
 
@@ -151,8 +177,10 @@ class DatabaseService extends ChangeNotifier {
     return budgetProgress >= 0.8 && !isBudgetExceeded;
   }
 
+  get currencyService => null;
+
   // Notifications
-  Future<void> _checkBudgetAndNotify(BuildContext? context) async {
+  Future<void> _checkBudgetAndNotify(BuildContext context) async {
     _checkInitialization();
     
     if (isBudgetExceeded) {
@@ -162,7 +190,7 @@ class DatabaseService extends ChangeNotifier {
         body: 'You exceeded budget by ${_currencyService.formatAmount(overspendAmount)}',
       );
       
-      if (context != null && context.mounted) {
+      if (context.mounted) {
         _showBudgetAlert(
           context, 
           'Budget Exceeded', 
@@ -209,6 +237,7 @@ class DatabaseService extends ChangeNotifier {
     await _expenseBox.close();
     await _archiveBox.close();
     await _budgetBox.close();
-    _soundService.dispose(); // Dispose sound service
+    await _budgetHistoryBox.close();
+    _soundService.dispose();
   }
 }
